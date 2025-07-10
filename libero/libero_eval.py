@@ -250,7 +250,6 @@ def eval_libero(args: Args) -> None:
                             
                     # Execute action in environment
                     obs, reward, done, info = env.step(action.tolist())
-                    print("yooyoyoyo", t, done)
                     if done:
                         task_successes += 1
                         total_successes += 1
