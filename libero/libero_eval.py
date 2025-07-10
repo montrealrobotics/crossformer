@@ -145,7 +145,7 @@ def eval_libero(args: Args) -> None:
 
             logging.info(f"Starting episode {task_episodes+1}...")
             while t < max_steps + args.num_steps_wait:
-                if True:
+                try:
                     # IMPORTANT: Do nothing for the first few timesteps because the simulator drops objects
                     # and we need to wait for them to fall
                     if t < args.num_steps_wait:
@@ -188,7 +188,7 @@ def eval_libero(args: Args) -> None:
                     if args.ensemble or (not args.execute_all_actions) or (args.execute_all_actions and not act_queue):
                         ## we want the model to predict a new action chunk
                         ## when we are using ensemble
-                        ## or we are just executing the first action in the chunk
+                        ## or we are only executing the first action in the chunk
                         ## or we are executing all actions in the chunk and the action history is empty
                         obs = stack_and_pad(history, num_obs)
                         # Query model to get action
@@ -256,9 +256,9 @@ def eval_libero(args: Args) -> None:
                         break
                     t += 1
 
-                # except Exception as e:
-                #     logging.error(f"Caught exception: {e}")
-                #     break
+                except Exception as e:
+                    logging.error(f"Caught exception: {e}")
+                    break
 
             task_episodes += 1
             total_episodes += 1
