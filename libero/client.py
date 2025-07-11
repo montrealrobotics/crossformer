@@ -1,4 +1,4 @@
-from typing import  Dict
+from typing import Dict
 
 from absl import logging
 import time
@@ -6,11 +6,11 @@ import numpy as np
 import requests
 import json_numpy
 from json_numpy import loads
+
 json_numpy.patch()
 
 
-
-class WebClientPolicy():
+class WebClientPolicy:
     """Implements the Policy interface by communicating with a web server.
 
     See WebsocketPolicyServer for a corresponding server implementation.
@@ -32,11 +32,12 @@ class WebClientPolicy():
             except Exception as e:
                 logging.info(f"Waiting for server at {self._uri}... ({e})")
             if time.time() - start_time > 60.0:
-                raise TimeoutError(f"Server at {self._uri} did not respond within 60 seconds.")
+                raise TimeoutError(
+                    f"Server at {self._uri} did not respond within 60 seconds."
+                )
             time.sleep(5.0)
 
     def infer(self, obs: Dict, ensemble: bool = False) -> np.ndarray:
-        
         action = loads(
             requests.post(
                 f"{self._uri}/query",
