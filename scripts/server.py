@@ -75,15 +75,17 @@ class HttpServer:
             self.models[name] = CrossFormerModel.load_pretrained(path, step=step)
 
         # settings for bimanual inference
-        self.head_name = "bimanual"
-        self.dataset_name = "aloha_pen_uncap_diverse_dataset"
-        self.action_dim = 14
-        self.pred_horizon = 100
+        self.head_name = "single_arm"
+        self.dataset_name = "bridge_dataset"
+        self.action_dim = 7
+        self.pred_horizon = 4
         self.exp_weight = 0
         self.horizon = 5
         self.text = None
         self.task = None
         self.rng = jax.random.PRNGKey(0)
+
+        self.resize_size = 224
 
         self.reset_history()
 
@@ -96,10 +98,7 @@ class HttpServer:
             self.reset(payload)
             payload = {
                 "observation": {
-                    "proprio_bimanual": np.zeros((14,)),
-                    "image_high": np.zeros((224, 224, 3)),
-                    "image_left_wrist": np.zeros((224, 224, 3)),
-                    "image_right_wrist": np.zeros((224, 224, 3)),
+                    "image_primary": np.zeros((224, 224, 3)),
                 },
                 "modality": "l",
                 "ensemble": True,
@@ -127,7 +126,7 @@ class HttpServer:
     def reset(self, payload: Dict[Any, Any]):
         model_name = payload.get("model", "crossformer")
         if "goal" in payload:
-            goal_img = resize(payload["goal"]["image_primary"])
+            goal_img = resize(payload["goal"]["image_primary"], size=(self.resize_size, self.resize_size))
             goal = {"image_primary": goal_img[None]}
             self.task = self.models[model_name].create_tasks(goals=goal)
         elif "text" in payload:
@@ -149,7 +148,7 @@ class HttpServer:
             obs = payload["observation"]
             for key in obs:
                 if "image" in key:
-                    obs[key] = resize(obs[key])
+                    obs[key] = resize(obs[key], size=(self.resize_size, self.resize_size))
                 # normalize proprioception expect for bimanual proprioception
                 if "proprio" in key and not key == "proprio_bimanual":
                     proprio_normalization_statistics = self.models[

@@ -12,17 +12,11 @@ import numpy as np
 from libero_utils import get_libero_env, quat2axisangle
 import tqdm
 import tyro
-from crossformer.model.crossformer_model import CrossFormerModel
+from client import WebClientPolicy
 
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
-
-
-def resize(img, size=(224, 224)):
-    ## copied from scripts.server.py
-    img = tf.image.resize(img, size=size, method="lanczos3", antialias=True)
-    return tf.cast(tf.clip_by_value(tf.round(img), 0, 255), tf.uint8).numpy()
 
 
 def stack_and_pad(history: collections.deque, num_obs: int):
@@ -102,13 +96,8 @@ def eval_libero(args: Args) -> None:
     else:
         raise ValueError(f"Unknown task suite: {args.task_suite_name}")
 
-    rng = jax.random.PRNGKey(0)
-    model = CrossFormerModel.load_pretrained(args.model_path)
+    client = WebClientPolicy(host="0.0.0.0", port=8000)
     
-    # print(model.dataset_statistics[args.dataset_name].keys())
-    # exit(0)
-    proprio_normalization_statistics = model.dataset_statistics[args.dataset_name]["proprio"] if "proprio" in model.dataset_statistics[args.dataset_name] else None
-    unnormalization_statistics = model.dataset_statistics[args.dataset_name]["action"]
     
     # Start evaluation
     total_episodes, total_successes = 0, 0
@@ -131,7 +120,7 @@ def eval_libero(args: Args) -> None:
             env.reset()
 
             # Reset model spesific objects
-            created_task = model.create_tasks(texts=[task_description])
+            client.reset(task_description)
             history = collections.deque(maxlen=args.horizon)
             num_obs = 0
             act_queue = collections.deque(maxlen=args.pred_horizon)
@@ -155,8 +144,8 @@ def eval_libero(args: Args) -> None:
 
                     # Get preprocessed image
                     # IMPORTANT: rotate 180 degrees to match train preprocessing
-                    img = resize(obs["agentview_image"][::-1, ::-1], size=(args.resize_size, args.resize_size))
-                    wrist_img = resize(obs["robot0_eye_in_hand_image"][::-1, ::-1], size=(args.resize_size, args.resize_size))
+                    img = obs["agentview_image"][::-1, ::-1]
+                    wrist_img = obs["robot0_eye_in_hand_image"][::-1, ::-1]
 
                     # Save preprocessed image for replay video
                     replay_images.append(img)
@@ -190,19 +179,7 @@ def eval_libero(args: Args) -> None:
                         ## when we are using ensemble
                         ## or we are only executing the first action in the chunk
                         ## or we are executing all actions in the chunk and the action history is empty
-                        obs = stack_and_pad(history, num_obs)
-                        # Query model to get action
-                        obs = jax.tree_map(lambda x: x[None], obs)
-
-                        rng, key = jax.random.split(rng)
-                        actions = model.sample_actions(
-                            obs,
-                            created_task,
-                            unnormalization_statistics,
-                            head_name=args.head_name,
-                            rng=key,
-                        )[0, :, : args.action_dim]
-                        actions = np.array(actions)
+                        actions = client.infer(element)
 
 
                     if args.ensemble:
