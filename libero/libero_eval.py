@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 import jax
 
@@ -5,13 +6,14 @@ import collections
 import dataclasses
 import logging
 import pathlib
+from typing import Optional
 
 import imageio
-from libero.libero import benchmark
-import numpy as np
-from libero_utils import get_libero_env, quat2axisangle
 import tqdm
 import tyro
+
+from libero.libero import benchmark
+from libero_utils import get_libero_env, quat2axisangle
 from crossformer.model.crossformer_model import CrossFormerModel
 
 
@@ -48,7 +50,9 @@ class Args:
     # Model server parameters
     #################################################################################################################
     model_path: str = "hf://rail-berkeley/crossformer"
-    resize_size: int = 224
+    model_step: Optional[int] = None # Finetunung step to load.
+    primary_resize: int = 224
+    wrist_resize: int = 128
     horizon: int = 5
     pred_horizon: int = 4
     exp_weight: int = 0
@@ -73,6 +77,7 @@ class Args:
     #################################################################################################################
     video_out_path: str = "data/libero/videos"  # Path to save videos
     seed: int = 7  # Random Seed (for reproducibility)
+    log_file_path: str = "data/libero/eval_libero.log"  # Path to save logs
 
 
 
@@ -87,7 +92,6 @@ def eval_libero(args: Args) -> None:
     num_tasks_in_suite = task_suite.n_tasks
     logging.info(f"Task suite: {args.task_suite_name}")
 
-    pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
     if args.task_suite_name == "libero_spatial":
         max_steps = 220  # longest training demo has 193 steps
@@ -102,13 +106,11 @@ def eval_libero(args: Args) -> None:
     else:
         raise ValueError(f"Unknown task suite: {args.task_suite_name}")
 
-    rng = jax.random.PRNGKey(0)
-    model = CrossFormerModel.load_pretrained(args.model_path)
+    rng = jax.random.PRNGKey(0) ## I am not sure if we should use args.seed
+    model = CrossFormerModel.load_pretrained(args.model_path, step=args.model_step)
     
-    # print(model.dataset_statistics[args.dataset_name].keys())
-    # exit(0)
-    proprio_normalization_statistics = model.dataset_statistics[args.dataset_name]["proprio"] if "proprio" in model.dataset_statistics[args.dataset_name] else None
-    unnormalization_statistics = model.dataset_statistics[args.dataset_name]["action"]
+    proprio_normalization_statistics = model.dataset_statistics["proprio_single"] if "proprio_single" in model.dataset_statistics else None
+    unnormalization_statistics = model.dataset_statistics["action"]
     
     # Start evaluation
     total_episodes, total_successes = 0, 0
@@ -155,8 +157,8 @@ def eval_libero(args: Args) -> None:
 
                     # Get preprocessed image
                     # IMPORTANT: rotate 180 degrees to match train preprocessing
-                    img = resize(obs["agentview_image"][::-1, ::-1], size=(args.resize_size, args.resize_size))
-                    wrist_img = resize(obs["robot0_eye_in_hand_image"][::-1, ::-1], size=(args.resize_size, args.resize_size))
+                    img = resize(obs["agentview_image"][::-1, ::-1], size=(args.primary_resize, args.primary_resize))
+                    wrist_img = resize(obs["robot0_eye_in_hand_image"][::-1, ::-1], size=(args.wrist_resize, args.wrist_resize))
 
                     # Save preprocessed image for replay video
                     replay_images.append(img)
@@ -167,19 +169,19 @@ def eval_libero(args: Args) -> None:
                         ## model does not have separate wrist image input 
                         ## or proporio input for single arms :(
 
-                        # "wrist_image": wrist_img,
-                        # "proprio": np.concatenate(
-                        #     (
-                        #         obs["robot0_eef_pos"],
-                        #         quat2axisangle(obs["robot0_eef_quat"]),
-                        #         obs["robot0_gripper_qpos"],
-                        #     )
-                        # ),
+                        "image_left_wrist": wrist_img,
+                        "proprio_single": np.concatenate(
+                            (
+                                obs["robot0_eef_pos"],
+                                quat2axisangle(obs["robot0_eef_quat"]),
+                                obs["robot0_gripper_qpos"],
+                            )
+                        ),
                     }
-                    # if proprio_normalization_statistics is not None:
-                    #     element["proprio"] = (element["proprio"] - proprio_normalization_statistics["mean"]) / (
-                    #                         proprio_normalization_statistics["std"]
-                    #                 )
+                    if proprio_normalization_statistics is not None:
+                        element["proprio_single"] = (element["proprio_single"] - proprio_normalization_statistics["mean"]) / (
+                                            proprio_normalization_statistics["std"]
+                                    )
                     
                     history.append(element)
                     num_obs += 1
@@ -203,8 +205,10 @@ def eval_libero(args: Args) -> None:
                             rng=key,
                         )[0, :, : args.action_dim]
                         actions = np.array(actions)
-
-
+                        ## for pretraining the gripper action is in [0, 1], 0: close, 1: open
+                        ## therefore for finetuning we converted libero datasets gripper action from [-1, 1] -1:open, 1: close
+                        ## to [0, 1] and we need to convert it back to [-1, 1] for the libero env
+                        actions[:, -1] = 2 * (1 - actions[:, -1]) - 1 
                     if args.ensemble:
                         ## when using emsemble, action_queue is used to store the history of action chunk predictions
                         act_queue.append(actions[: args.pred_horizon])
@@ -284,11 +288,17 @@ def eval_libero(args: Args) -> None:
 
     logging.info(f"Total success rate: {float(total_successes) / float(total_episodes)}")
     logging.info(f"Total episodes: {total_episodes}")
-
-
+    env.close()
 
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    tyro.cli(eval_libero)
+    args = tyro.cli(Args)
+    pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=args.log_file_path,
+        filemode='w',                                       # File to write logs to
+        level=logging.INFO,                                 # Minimum log level to capture
+        format='%(asctime)s - %(levelname)s - %(message)s'  # Log format
+    )   
+    eval_libero(args)
