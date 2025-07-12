@@ -51,7 +51,17 @@ You can find the pre-trained CrossFormer 130M parameter checkpoint [here](https:
 
 ## CrossFormer Evaluation
 
-See [scripts/server.py](scripts/server.py) for an example of how to host the CrossFormer model on a server for remote inference. Remote inference is useful for evaluating on robots that cannot be directly connected to a powerful GPU.
+See [scripts/server.py](scripts/server.py) for an example of how to host the CrossFormer model on a server for remote inference. See [libero/libero_eval.py](libero/libero_eval.py) for an example script for evaluation in the LIBERO environment.
+
+Start by running a CrossFormer server for LIBERO inference:
+```bash
+python scripts/server.py --env_config libero
+```
+
+Once the server is ready (you see `INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)` in the terminal), run the LIBERO evaluation script:
+```bash
+python libero/libero_eval.py
+```
 
 ## CrossFormer Pre-training
 
