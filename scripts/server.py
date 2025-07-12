@@ -1,34 +1,6 @@
-"""
-A server for hosting a CrossFormer model for inference.
-
-On action server: pip install uvicorn fastapi json-numpy
-On client: pip install requests json-numpy
-
-On client:
-
-import requests
-import json_numpy
-from json_numpy import loads
-json_numpy.patch()
-
-Reset and provide the task before starting the rollout:
-
-requests.post("http://serverip:port/reset", json={"text": ...})
-
-Sample an action:
-
-action = loads(
-    requests.post(
-        "http://serverip:port/query",
-        json={"observation": ...},
-    ).json()
-)
-"""
-
-
+from dataclasses import dataclass
 import json_numpy
 
-json_numpy.patch()
 from collections import deque
 import time
 import traceback
@@ -42,6 +14,7 @@ import tensorflow as tf
 import uvicorn
 
 from crossformer.model.crossformer_model import CrossFormerModel
+json_numpy.patch()
 
 
 def json_response(obj):
@@ -68,19 +41,56 @@ def stack_and_pad(history: deque, num_obs: int):
     return full_obs
 
 
+# --- Environment Configs ---
+@dataclass
+class EnvironmentConfig:
+    head_name: str
+    dataset_name: str
+    action_dim: int
+    pred_horizon: int
+    exp_weight: float
+    horizon: int
+
+
+@dataclass
+class LiberoConfig(EnvironmentConfig):
+    head_name: str = "single_arm"
+    dataset_name: str = "bridge_dataset"
+    action_dim: int = 7
+    pred_horizon: int = 4
+    exp_weight: float = 0
+    horizon: int = 5
+
+
+@dataclass
+class AlohaConfig(EnvironmentConfig):
+    head_name: str = "bimanual"
+    dataset_name: str = "aloha_pen_uncap_diverse_dataset"
+    action_dim: int = 14
+    pred_horizon: int = 100
+    exp_weight: float = 0
+    horizon: int = 5
+
+
+ENV_CONFIGS = {
+    "libero": LiberoConfig,
+    "aloha": AlohaConfig,
+}
+
+
 class HttpServer:
-    def __init__(self, paths):
+    def __init__(self, paths, env_config: EnvironmentConfig):
         self.models = dict()
         for name, path, step in paths:
             self.models[name] = CrossFormerModel.load_pretrained(path, step=step)
 
-        # settings for bimanual inference
-        self.head_name = "single_arm"
-        self.dataset_name = "bridge_dataset"
-        self.action_dim = 7
-        self.pred_horizon = 4
-        self.exp_weight = 0
-        self.horizon = 5
+        # Use environment config
+        self.head_name = env_config.head_name
+        self.dataset_name = env_config.dataset_name
+        self.action_dim = env_config.action_dim
+        self.pred_horizon = env_config.pred_horizon
+        self.exp_weight = env_config.exp_weight
+        self.horizon = env_config.horizon
         self.text = None
         self.task = None
         self.rng = jax.random.PRNGKey(0)
@@ -126,7 +136,10 @@ class HttpServer:
     def reset(self, payload: Dict[Any, Any]):
         model_name = payload.get("model", "crossformer")
         if "goal" in payload:
-            goal_img = resize(payload["goal"]["image_primary"], size=(self.resize_size, self.resize_size))
+            goal_img = resize(
+                payload["goal"]["image_primary"],
+                size=(self.resize_size, self.resize_size),
+            )
             goal = {"image_primary": goal_img[None]}
             self.task = self.models[model_name].create_tasks(goals=goal)
         elif "text" in payload:
@@ -142,13 +155,14 @@ class HttpServer:
 
     def sample_actions(self, payload: Dict[Any, Any]):
         try:
-
             model_name = payload.get("model", "crossformer")
 
             obs = payload["observation"]
             for key in obs:
                 if "image" in key:
-                    obs[key] = resize(obs[key], size=(self.resize_size, self.resize_size))
+                    obs[key] = resize(
+                        obs[key], size=(self.resize_size, self.resize_size)
+                    )
                 # normalize proprioception expect for bimanual proprioception
                 if "proprio" in key and not key == "proprio_bimanual":
                     proprio_normalization_statistics = self.models[
@@ -219,6 +233,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", help="Host to run on", default="0.0.0.0", type=str)
     parser.add_argument("--port", help="Port to run on", default=8000, type=int)
+    parser.add_argument(
+        "--env_config",
+        help="Environment config name (libero, aloha)",
+        default="libero",
+        type=str,
+    )
     args = parser.parse_args()
 
     # name, path, step
@@ -226,7 +246,14 @@ def main():
         ("crossformer", "hf://rail-berkeley/crossformer", None),
     ]
 
-    server = HttpServer(paths)
+    env_config_name = args.env_config.lower()
+    if env_config_name not in ENV_CONFIGS:
+        raise ValueError(
+            f"Unknown env_config '{env_config_name}'. Available: {list(ENV_CONFIGS.keys())}"
+        )
+    env_config = ENV_CONFIGS[env_config_name]()
+
+    server = HttpServer(paths, env_config)
     server.run(args.port, args.host)
 
 

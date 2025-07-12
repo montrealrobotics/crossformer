@@ -1,6 +1,3 @@
-import tensorflow as tf
-import jax
-
 import collections
 import dataclasses
 import logging
@@ -19,46 +16,21 @@ LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 
 
-def stack_and_pad(history: collections.deque, num_obs: int):
-    ## copied from scripts.server.py
-
-    """
-    Converts a list of observation dictionaries (`history`) into a single observation dictionary
-    by stacking the values. Adds a padding mask to the observation that denotes which timesteps
-    represent padding based on the number of observations seen so far (`num_obs`).
-    """
-    horizon = len(history)
-    full_obs = {k: np.stack([dic[k] for dic in history]) for k in history[0]}
-    pad_length = horizon - min(num_obs, horizon)
-    timestep_pad_mask = np.ones(horizon)
-    timestep_pad_mask[:pad_length] = 0
-    full_obs["timestep_pad_mask"] = timestep_pad_mask
-    return full_obs
-
-
 @dataclasses.dataclass
 class Args:
     #################################################################################################################
     # Model server parameters
     #################################################################################################################
-    model_path: str = "hf://rail-berkeley/crossformer"
-    resize_size: int = 224
-    horizon: int = 5
-    pred_horizon: int = 4
-    exp_weight: int = 0
-
     execute_all_actions: bool = (
         False  # Whether to execute all actions in the action chunk
     )
+    pred_horizon: int = 4  # Number of actions to predict in the action chunk
     ensemble: bool = False  # Whether to use ensemble inference
 
     #################################################################################################################
     # LIBERO environment-specific parameters
     #################################################################################################################
-    head_name: str = "single_arm"
-    dataset_name: str = "liber_o10"
     task_suite_name: str = "libero_10"  # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10, libero_90
-    action_dim: int = 7
     num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize i n sim
     num_trials_per_task: int = 50  # Number of rollouts per task
 
@@ -118,7 +90,6 @@ def eval_libero(args: Args) -> None:
 
             # Reset model spesific objects
             client.reset(task_description)
-            history = collections.deque(maxlen=args.horizon)
             num_obs = 0
             act_queue = collections.deque(maxlen=args.pred_horizon)
 
@@ -166,7 +137,6 @@ def eval_libero(args: Args) -> None:
                     #                         proprio_normalization_statistics["std"]
                     #                 )
 
-                    history.append(element)
                     num_obs += 1
 
                     if (
@@ -177,30 +147,12 @@ def eval_libero(args: Args) -> None:
                         ## we want the model to predict a new action chunk
                         ## when we are using ensemble
                         ## or we are only executing the first action in the chunk
-                        ## or we are executing all actions in the chunk and the action history is empty
-                        actions = client.infer(element)
+                        ## or we are executing all actions in the chunk and the action queue is empty
+                        actions = client.infer(element, args.ensemble)
 
                     if args.ensemble:
-                        ## when using emsemble, action_queue is used to store the history of action chunk predictions
-                        act_queue.append(actions[: args.pred_horizon])
-                        num_actions = len(act_queue)
-
-                        # select the predicted action for the current step from the history of action chunk predictions
-                        curr_act_preds = np.stack(
-                            [
-                                pred_actions[i]
-                                for (i, pred_actions) in zip(
-                                    range(num_actions - 1, -1, -1), act_queue
-                                )
-                            ]
-                        )
-
-                        # more recent predictions get exponentially *less* weight than older predictions
-                        weights = np.exp(-args.exp_weight * np.arange(num_actions))
-                        weights = weights / weights.sum()
-                        # compute the weighted average across all predictions for this timestep
-                        action = np.sum(weights[:, None] * curr_act_preds, axis=0)
-                    elif not args.execute_all_actions:
+                        action = actions
+                    if not args.ensemble and not args.execute_all_actions:
                         ## no temp ensemble, and not executing all actions
                         ## so just take the first action in the action chunk
                         ## and predict a new chunk
