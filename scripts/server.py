@@ -55,7 +55,7 @@ class EnvironmentConfig:
 @dataclass
 class LiberoConfig(EnvironmentConfig):
     head_name: str = "single_arm"
-    dataset_name: str = "bridge_dataset"
+    dataset_name: str = "liber_o10"
     action_dim: int = 7
     pred_horizon: int = 4
     exp_weight: float = 0
@@ -179,9 +179,12 @@ class HttpServer:
             # add batch dim
             obs = jax.tree_map(lambda x: x[None], obs)
 
-            unnormalization_statistics = self.models[model_name].dataset_statistics[
-                self.dataset_name
-            ]["action"]
+            if "action" in self.models[model_name].dataset_statistics:
+                unnormalization_statistics = self.models[model_name].dataset_statistics["action"]
+            else:
+                unnormalization_statistics = self.models[model_name].dataset_statistics[
+                    self.dataset_name
+                ]["action"]
 
             self.rng, key = jax.random.split(self.rng)
             actions = self.models[model_name].sample_actions(
@@ -233,6 +236,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", help="Host to run on", default="0.0.0.0", type=str)
     parser.add_argument("--port", help="Port to run on", default=8000, type=int)
+    parser.add_argument("--model_path", help="Path to the model", type=str, default="hf://rail-berkeley/crossformer")
+    parser.add_argument("--model_step", help="Model step to load", type=int, default=None)
     parser.add_argument(
         "--env_config",
         help="Environment config name (libero, aloha)",
@@ -243,7 +248,7 @@ def main():
 
     # name, path, step
     paths = [
-        ("crossformer", "hf://rail-berkeley/crossformer", None),
+        ("crossformer", args.model_path, args.model_step),
     ]
 
     env_config_name = args.env_config.lower()

@@ -149,6 +149,11 @@ def eval_libero(args: Args) -> None:
                         ## or we are only executing the first action in the chunk
                         ## or we are executing all actions in the chunk and the action queue is empty
                         actions = client.infer(element, args.ensemble)
+                        actions = np.array(actions)
+                        ## for pretraining the gripper action is in [0, 1], 0: close, 1: open
+                        ## therefore for finetuning we converted libero datasets gripper action from [-1, 1] -1:open, 1: close
+                        ## to [0, 1] and we need to convert it back to [-1, 1] for the libero env
+                        actions[:, -1] = 2 * (1 - actions[:, -1]) - 1 
 
                     if args.ensemble:
                         action = actions
