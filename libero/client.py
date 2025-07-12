@@ -1,4 +1,6 @@
-from typing import Dict
+from typing import Dict, Any
+
+from abc import ABC, abstractmethod
 
 from absl import logging
 import time
@@ -10,10 +12,22 @@ from json_numpy import loads
 json_numpy.patch()
 
 
-class WebClientPolicy:
-    """Implements the Policy interface by communicating with a web server.
+class WebClientPolicy(ABC):
+    """Abstract interface for a web client policy."""
 
-    See WebsocketPolicyServer for a corresponding server implementation.
+    @abstractmethod
+    def infer(self, obs: Dict[str, Any], ensemble: bool = False) -> np.ndarray:
+        pass
+
+    @abstractmethod
+    def reset(self, task: str) -> None:
+        pass
+
+
+class WebClientCrossFormerPolicy(WebClientPolicy):
+    """Implements the WebClientPolicy interface for CrossFormer model by communicating with a web server.
+
+    See scripts/server.py for a corresponding server implementation.
     """
 
     def __init__(self, host: str = "0.0.0.0", port: int = 8000) -> None:
@@ -37,7 +51,7 @@ class WebClientPolicy:
                 )
             time.sleep(5.0)
 
-    def infer(self, obs: Dict, ensemble: bool = False) -> np.ndarray:
+    def infer(self, obs: Dict[str, Any], ensemble: bool = False) -> np.ndarray:
         action = loads(
             requests.post(
                 f"{self._uri}/query",

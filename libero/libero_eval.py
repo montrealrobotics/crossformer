@@ -9,7 +9,7 @@ import numpy as np
 from libero_utils import get_libero_env, quat2axisangle
 import tqdm
 import tyro
-from client import WebClientPolicy
+from client import WebClientCrossFormerPolicy
 
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
@@ -66,7 +66,7 @@ def eval_libero(args: Args) -> None:
     else:
         raise ValueError(f"Unknown task suite: {args.task_suite_name}")
 
-    client = WebClientPolicy(host="0.0.0.0", port=8000)
+    client = WebClientCrossFormerPolicy(host="0.0.0.0", port=8000)
 
     # Start evaluation
     total_episodes, total_successes = 0, 0
