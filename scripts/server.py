@@ -47,9 +47,12 @@ class EnvironmentConfig:
     head_name: str
     dataset_name: str
     action_dim: int
+    proprio_dim: int
     pred_horizon: int
     exp_weight: float
     horizon: int
+    primary_resize: int
+    wrist_resize: int
 
 
 @dataclass
@@ -57,9 +60,12 @@ class LiberoConfig(EnvironmentConfig):
     head_name: str = "single_arm"
     dataset_name: str = "liber_o10"
     action_dim: int = 7
+    proprio_dim: int = 8
     pred_horizon: int = 4
     exp_weight: float = 0
     horizon: int = 5
+    primary_resize: int = 224
+    wrist_resize: int = 128
 
 
 @dataclass
@@ -67,9 +73,12 @@ class AlohaConfig(EnvironmentConfig):
     head_name: str = "bimanual"
     dataset_name: str = "aloha_pen_uncap_diverse_dataset"
     action_dim: int = 14
+    proprio_dim: int = 14
     pred_horizon: int = 100
     exp_weight: float = 0
     horizon: int = 5
+    primary_resize: int = 224
+    wrist_resize: int = 128
 
 
 ENV_CONFIGS = {
@@ -88,14 +97,16 @@ class HttpServer:
         self.head_name = env_config.head_name
         self.dataset_name = env_config.dataset_name
         self.action_dim = env_config.action_dim
+        self.proprio_dim = env_config.proprio_dim
         self.pred_horizon = env_config.pred_horizon
         self.exp_weight = env_config.exp_weight
         self.horizon = env_config.horizon
+        self.primary_resize = env_config.primary_resize
+        self.wrist_resize = env_config.wrist_resize
         self.text = None
         self.task = None
         self.rng = jax.random.PRNGKey(0)
 
-        self.resize_size = 224
 
         self.reset_history()
 
@@ -106,10 +117,17 @@ class HttpServer:
                 "model": name,
             }
             self.reset(payload)
+            observation = {
+                    "image_primary": np.zeros((self.primary_resize, self.primary_resize, 3)),
+                    "image_left_wrist": np.zeros((self.wrist_resize, self.wrist_resize, 3)),
+                    "proprio_single": np.zeros((self.proprio_dim,)),
+                }
+            if self.head_name == "bimanual":
+                observation["image_right_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3))
+                observation["proprio_bimanual"] = np.zeros((self.proprio_dim,))
+                del observation["proprio_single"]
             payload = {
-                "observation": {
-                    "image_primary": np.zeros((224, 224, 3)),
-                },
+                "observation": observation,
                 "modality": "l",
                 "ensemble": True,
                 "model": name,
@@ -138,7 +156,7 @@ class HttpServer:
         if "goal" in payload:
             goal_img = resize(
                 payload["goal"]["image_primary"],
-                size=(self.resize_size, self.resize_size),
+                size=(self.primary_resize, self.primary_resize),
             )
             goal = {"image_primary": goal_img[None]}
             self.task = self.models[model_name].create_tasks(goals=goal)
@@ -160,14 +178,26 @@ class HttpServer:
             obs = payload["observation"]
             for key in obs:
                 if "image" in key:
-                    obs[key] = resize(
-                        obs[key], size=(self.resize_size, self.resize_size)
-                    )
+                    if "primary" in key:
+                        obs[key] = resize(
+                            obs[key], size=(self.primary_resize, self.primary_resize)
+                        )
+                    elif "wrist" in key:
+                        obs[key] = resize(
+                            obs[key], size=(self.wrist_resize, self.wrist_resize)
+                        )
+                    else:
+                        raise ValueError(f"Unknown image key: {key}")
                 # normalize proprioception expect for bimanual proprioception
                 if "proprio" in key and not key == "proprio_bimanual":
-                    proprio_normalization_statistics = self.models[
-                        model_name
-                    ].dataset_statistics[self.dataset_name][key]
+                    if key in self.models[model_name].dataset_statistics:
+                        proprio_normalization_statistics = self.models[
+                            model_name
+                        ].dataset_statistics[key]
+                    else:
+                        proprio_normalization_statistics = self.models[
+                            model_name
+                        ].dataset_statistics[self.dataset_name][key]
                     obs[key] = (obs[key] - proprio_normalization_statistics["mean"]) / (
                         proprio_normalization_statistics["std"]
                     )

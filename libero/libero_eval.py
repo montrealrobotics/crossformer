@@ -150,9 +150,10 @@ def eval_libero(args: Args) -> None:
                         ## therefore for finetuning we converted libero datasets gripper action from [-1, 1] -1:open, 1: close
                         ## to [0, 1] and we need to convert it back to [-1, 1] for the libero env
                         actions[:, -1] = 2 * (1 - actions[:, -1]) - 1 
+                        
                     if args.ensemble:
                         action = actions
-                    if not args.ensemble and not args.execute_all_actions:
+                    elif not args.execute_all_actions:
                         ## no temp ensemble, and not executing all actions
                         ## so just take the first action in the action chunk
                         ## and predict a new chunk
