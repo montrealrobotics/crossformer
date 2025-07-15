@@ -22,18 +22,18 @@ def get_config():
 
     # fill this in to configure data loading for your dataset.
     FINETUNING_KWARGS = dict(
-        name="libero_10_no_noops",
-        data_dir="/network/projects/real-g-grp/modified_libero_rlds",
-        image_obs_keys={"primary": "image", "left_wrist": "wrist_image"},
-        proprio_obs_keys={"single": "state"},
-        proprio_obs_dims={"single": 8},
+        name="droid_100",
+        data_dir="/network/projects/real-g-grp/droid",
+        image_obs_keys={"primary": "exterior_image_1_left", "left_wrist": "wrist_image_left"},
+        proprio_obs_keys={"single": "proprio"},
+        proprio_obs_dims={"single": 7}, ## cartesian pose + gripper
         language_key="language_instruction",
         action_proprio_normalization_type="normal",
         # We want to avoid normalizing the gripper
         action_normalization_mask=[True, True, True, True, True, True, False],
         # standardize_fn is dynamically loaded from a file
         standardize_fn=ModuleSpec.create(
-            "crossformer.data.oxe.oxe_standardization_transforms:libero_dataset_transform",
+            "crossformer.data.oxe.oxe_standardization_transforms:droid_dataset_transform",
         ),
         # If the default data loading speed is too slow, try these:
         # "num_parallel_reads": 8,  # for reading from disk / GCS
