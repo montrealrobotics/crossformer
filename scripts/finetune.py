@@ -176,6 +176,17 @@ def main(_):
     #
     #########
 
+    ## to keep everything similar to pretrained config 
+    ## change the dataset_statistics to be a dictionary with one key
+    ## that contains the dataset statistics
+
+    dataset_statistics = {FLAGS.config.dataset_kwargs["name"]: dataset.dataset_statistics}
+    if FLAGS.config.dataset_kwargs.combine_statistics:
+        ## combine the pretrained model's dataset statistics with the finetuning dataset's
+        dataset_statistics.update(
+            pretrained_model.dataset_statistics
+        )
+    
     rng = jax.random.PRNGKey(FLAGS.config.seed)
     rng, init_rng = jax.random.split(rng)
     model = CrossFormerModel.from_config(
@@ -183,7 +194,7 @@ def main(_):
         example_batch,
         text_processor,
         rng=init_rng,
-        dataset_statistics=dataset.dataset_statistics,
+        dataset_statistics=dataset_statistics,
     )
     merged_params = merge_params(model.params, pretrained_model.params)
     model = model.replace(params=merged_params)
