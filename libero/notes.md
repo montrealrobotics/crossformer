@@ -16,3 +16,17 @@ python libero_eval.py\
   --model_path /network/scratch/o/ozgur.aslan/cross_ft/crossformer_finetune/experiment_20250710_170012\
   --model_step 30000
 ```
+
+If you get ```KeyError: 'getgrgid(): gid not found:```  error:  
+Changed the line:
+```python 
+group = grp.getgrgid(st.st_gid).gr_name
+```
+to
+```python
+try:
+    group = grp.getgrgid(st.st_gid).gr_name
+except KeyError:
+    group = str(st.st_gid)  # fallback to just the GID string
+```
+in ```.conda/envs/<<env_name>>/lib/python3.10/site-packages/etils/epath/backend.py```
