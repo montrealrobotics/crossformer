@@ -51,14 +51,18 @@ class WebClientCrossFormerPolicy(WebClientPolicy):
                 )
             time.sleep(5.0)
 
-    def infer(self, obs: Dict[str, Any], ensemble: bool = False) -> np.ndarray:
+    def infer(self, ensemble: bool = False) -> np.ndarray:
         action = loads(
             requests.post(
                 f"{self._uri}/query",
-                json={"observation": obs, "ensemble": ensemble},
+                json={"ensemble": ensemble},
             ).json()
         )
         return action
+
+    def send(self, obs: Dict[str, Any]) -> None:
+        """Sends an observation to the server so that it is appended to history."""
+        requests.post(f"{self._uri}/append", json={"observation": obs})
 
     def reset(self, task: str) -> None:
         requests.post(f"{self._uri}/reset", json={"text": task})

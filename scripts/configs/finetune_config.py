@@ -34,6 +34,7 @@ def get_config():
         standardize_fn=ModuleSpec.create(
             "crossformer.data.oxe.oxe_standardization_transforms:bridge_dataset_transform",
         ),
+        combine_statistics=False, ## used to combine pretrained model's dataset statistics with the finetuning dataset's
         # If the default data loading speed is too slow, try these:
         # "num_parallel_reads": 8,  # for reading from disk / GCS
         # "num_parallel_calls": 16,  # for initial dataset construction

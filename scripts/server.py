@@ -58,7 +58,7 @@ class EnvironmentConfig:
 @dataclass
 class LiberoConfig(EnvironmentConfig):
     head_name: str = "single_arm"
-    dataset_name: str = "liber_o10"
+    dataset_name: str = "libero_10_no_noops"
     action_dim: int = 7
     proprio_dim: int = 8
     pred_horizon: int = 4
@@ -128,13 +128,11 @@ class HttpServer:
                 del observation["proprio_single"]
             payload = {
                 "observation": observation,
-                "modality": "l",
-                "ensemble": True,
                 "model": name,
-                "dataset_name": self.dataset_name,
             }
             for _ in range(self.horizon):
                 start = time.time()
+                print(self.append_observation(payload))
                 print(self.sample_actions(payload))
                 print(time.time() - start)
 
@@ -142,9 +140,10 @@ class HttpServer:
 
     def run(self, port=8000, host="0.0.0.0"):
         self.app = FastAPI()
+        self.app.post("/append")(self.append_observation)
         self.app.post("/query")(self.sample_actions)
         self.app.post("/reset")(self.reset)
-        uvicorn.run(self.app, host=host, port=port)
+        uvicorn.run(self.app, host=host, port=port, log_level="critical")
 
     def reset_history(self):
         self.history = deque(maxlen=self.horizon)
@@ -170,8 +169,8 @@ class HttpServer:
         self.reset_history()
 
         return "reset"
-
-    def sample_actions(self, payload: Dict[Any, Any]):
+    
+    def append_observation(self, payload: Dict[Any, Any]):
         try:
             model_name = payload.get("model", "crossformer")
 
@@ -190,31 +189,32 @@ class HttpServer:
                         raise ValueError(f"Unknown image key: {key}")
                 # normalize proprioception expect for bimanual proprioception
                 if "proprio" in key and not key == "proprio_bimanual":
-                    if key in self.models[model_name].dataset_statistics:
-                        proprio_normalization_statistics = self.models[
-                            model_name
-                        ].dataset_statistics[key]
-                    else:
-                        proprio_normalization_statistics = self.models[
-                            model_name
-                        ].dataset_statistics[self.dataset_name][key]
+                    proprio_normalization_statistics = self.models[
+                        model_name
+                    ].dataset_statistics[self.dataset_name][key]
                     obs[key] = (obs[key] - proprio_normalization_statistics["mean"]) / (
                         proprio_normalization_statistics["std"]
                     )
 
             self.history.append(obs)
             self.num_obs += 1
+
+            return "append"
+        except:
+            print(traceback.format_exc())
+            return "error"
+        
+    def sample_actions(self, payload: Dict[Any, Any]):
+        try:
+            model_name = payload.get("model", "crossformer")
             obs = stack_and_pad(self.history, self.num_obs)
 
             # add batch dim
             obs = jax.tree_map(lambda x: x[None], obs)
 
-            if "action" in self.models[model_name].dataset_statistics:
-                unnormalization_statistics = self.models[model_name].dataset_statistics["action"]
-            else:
-                unnormalization_statistics = self.models[model_name].dataset_statistics[
-                    self.dataset_name
-                ]["action"]
+            unnormalization_statistics = self.models[model_name].dataset_statistics[
+                self.dataset_name
+            ]["action"]
 
             self.rng, key = jax.random.split(self.rng)
             actions = self.models[model_name].sample_actions(
@@ -228,8 +228,8 @@ class HttpServer:
             actions = np.array(actions)
 
             # whether to temporally ensemble the action predictions or return the full chunk
-            if not payload.get("ensemble", True):
-                print(actions)
+            if not payload.get("ensemble", False):
+                # print(actions)
                 return json_response(actions)
 
             self.act_history.append(actions[: self.pred_horizon])
@@ -251,7 +251,7 @@ class HttpServer:
             # compute the weighted average across all predictions for this timestep
             action = np.sum(weights[:, None] * curr_act_preds, axis=0)
 
-            print(action)
+            # print(action)
             return json_response(action)
         except:
             print(traceback.format_exc())

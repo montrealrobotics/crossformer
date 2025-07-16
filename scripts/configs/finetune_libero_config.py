@@ -35,6 +35,7 @@ def get_config():
         standardize_fn=ModuleSpec.create(
             "crossformer.data.oxe.oxe_standardization_transforms:libero_dataset_transform",
         ),
+        combine_statistics=False, ## used to combine pretrained model's dataset statistics with the finetuning dataset's
         # If the default data loading speed is too slow, try these:
         # "num_parallel_reads": 8,  # for reading from disk / GCS
         # "num_parallel_calls": 16,  # for initial dataset construction
@@ -51,7 +52,7 @@ def get_config():
                 #     task_film_keys=["language_instruction"],
                 #     encoder=ModuleSpec.create(ResNet26FILM),
                 # )
-                new_proprio=ModuleSpec.create(
+                single=ModuleSpec.create(
                     LowdimObsTokenizer,
                     obs_keys=["proprio_single"],
                     dropout_rate=0.2,

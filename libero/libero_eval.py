@@ -9,7 +9,7 @@ import tqdm
 import tyro
 from libero.libero import benchmark
 from libero_utils import get_libero_env, quat2axisangle
-from client import WebClientCrossFormerPolicy
+from scripts.client import WebClientCrossFormerPolicy
 
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
@@ -21,25 +21,21 @@ class Args:
     #################################################################################################################
     # Model server parameters
     #################################################################################################################
-    execute_all_actions: bool = (
-        False  # Whether to execute all actions in the action chunk
-    )
-    pred_horizon: int = 4  # Number of actions to predict in the action chunk
+    execute_all_actions: bool = False  # Whether to execute all actions in the action chunk
     ensemble: bool = False  # Whether to use ensemble inference
 
     #################################################################################################################
     # LIBERO environment-specific parameters
     #################################################################################################################
     task_suite_name: str = "libero_10"  # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10, libero_90
-    num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize i n sim
+    num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize in sim
     num_trials_per_task: int = 50  # Number of rollouts per task
 
     #################################################################################################################
     # Utils
     #################################################################################################################
-    video_out_path: str = "data/libero/videos"  # Path to save videos
+    out_path: str = "data/libero/"  # Path to save videos
     seed: int = 7  # Random Seed (for reproducibility)
-    log_file_path: str = "data/libero/eval_libero.log"  # Path to save logs
 
 
 def eval_libero(args: Args) -> None:
@@ -69,6 +65,7 @@ def eval_libero(args: Args) -> None:
     client = WebClientCrossFormerPolicy(host="0.0.0.0", port=8000)
 
     # Start evaluation
+    task_success_list = []
     total_episodes, total_successes = 0, 0
     for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
         # Get task
@@ -90,8 +87,7 @@ def eval_libero(args: Args) -> None:
 
             # Reset model spesific objects
             client.reset(task_description)
-            num_obs = 0
-            act_queue = collections.deque(maxlen=args.pred_horizon)
+            act_queue = collections.deque()
 
             # Set initial states
             obs = env.set_init_state(initial_states[episode_idx])
@@ -133,8 +129,7 @@ def eval_libero(args: Args) -> None:
                             )
                         ),
                     }
-                    num_obs += 1
-
+                    client.send(element)
                     if (
                         args.ensemble
                         or (not args.execute_all_actions)
@@ -144,7 +139,7 @@ def eval_libero(args: Args) -> None:
                         ## when we are using ensemble
                         ## or we are only executing the first action in the chunk
                         ## or we are executing all actions in the chunk and the action queue is empty
-                        actions = client.infer(element, args.ensemble)
+                        actions = client.infer(args.ensemble)
                         actions = np.array(actions)
                         ## for pretraining the gripper action is in [0, 1], 0: close, 1: open
                         ## therefore for finetuning we converted libero datasets gripper action from [-1, 1] -1:open, 1: close
@@ -165,7 +160,7 @@ def eval_libero(args: Args) -> None:
                         ## and the queue is empty
                         ## so use the queue as the holder of actions in the chunk
                         ## and pop the first action in the queue
-                        act_queue.extend(actions[: args.pred_horizon])
+                        act_queue.extend(actions)
                         action = act_queue.popleft()
                     else:
                         ## no temp ensemble, but executing all actions in predicted chunk
@@ -196,7 +191,7 @@ def eval_libero(args: Args) -> None:
             suffix = "success" if done else "failure"
             task_segment = task_description.replace(" ", "_")
             imageio.mimwrite(
-                pathlib.Path(args.video_out_path)
+                pathlib.Path(args.out_path) / "videos"
                 / f"rollout_{task_segment}_{suffix}.mp4",
                 [np.asarray(x) for x in replay_images],
                 fps=10,
@@ -216,6 +211,10 @@ def eval_libero(args: Args) -> None:
         logging.info(
             f"Current total success rate: {float(total_successes) / float(total_episodes)}"
         )
+        task_success_list.append((task_description, float(task_successes) / float(task_episodes)))
+    
+    log_message = '\n'.join(f"Task: {item_str}, success rate: {item_float}" for item_str, item_float in task_success_list)
+    logging.info(f"Task succes rates:\n{log_message}")
 
     logging.info(
         f"Total success rate: {float(total_successes) / float(total_episodes)}"
@@ -227,9 +226,9 @@ def eval_libero(args: Args) -> None:
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
-    pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(args.out_path).joinpath("videos").mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
-        filename=args.log_file_path,
+        filename= pathlib.Path(args.out_path) / "libero_eval.log",  # Path to save logs
         filemode='w',                                       # File to write logs to
         level=logging.INFO,                                 # Minimum log level to capture
         format='%(asctime)s - %(levelname)s - %(message)s'  # Log format
