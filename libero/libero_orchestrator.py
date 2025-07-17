@@ -9,10 +9,10 @@ import os
 # Define the server and client script names
 ## funny enough we can also add argparser or dataclass to pass these arguments 
 current_dir = os.path.dirname(__file__)
-SERVER_SCRIPT = os.path.join(current_dir, "server.py")
-CLIENT_SCRIPT = os.path.join(current_dir, "..", "libero", "libero_eval.py") 
+SERVER_SCRIPT = os.path.join(current_dir, "..", "scripts", "server.py")
+CLIENT_SCRIPT = os.path.join(current_dir, "libero_eval.py") 
 
-out_path = "/network/scratch/o/ozgur.aslan/data/libero/client_server2"
+out_path = "/network/scratch/o/ozgur.aslan/data/libero/client_server3"
 model_path = "/network/scratch/o/ozgur.aslan/cross_ft/crossformer_finetune/experiment_20250710_170012"
 model_step = "30000"
 
