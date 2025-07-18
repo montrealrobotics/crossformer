@@ -30,3 +30,14 @@ except KeyError:
     group = str(st.st_gid)  # fallback to just the GID string
 ```
 in ```.conda/envs/<<env_name>>/lib/python3.10/site-packages/etils/epath/backend.py```
+
+
+## Install
+- To install follow crossformer installing instructions.
+- Installing server-client dependencies: ```pip install -r server_client_req.txt ```
+- Checking if jax can see the gpu(s): ```import jax; jax.devices() ```
+- Checking if tensorflow can see the gpu(s): ```import tensorflow as tf; tf.config.list_physical_devices('GPU') ```
+- If ```tf.config.list_physical_devices('GPU')``` returns an empty list, try: ```pip install tensorflow[and-cuda]==2.15.1 ```
+- To use libero:
+  - Installing libero dependencies: ```pip install -r libero/libero_requirements.txt ```
+  - Also need to install torch: ```pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 ```

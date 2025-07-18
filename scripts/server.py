@@ -22,6 +22,8 @@ def json_response(obj):
 
 
 def resize(img, size=(224, 224)):
+    if img.shape[-3:-1] == size and img.dtype == np.uint8:
+        return img
     img = tf.image.resize(img, size=size, method="lanczos3", antialias=True)
     return tf.cast(tf.clip_by_value(tf.round(img), 0, 255), tf.uint8).numpy()
 
@@ -56,6 +58,19 @@ class EnvironmentConfig:
 
 
 @dataclass
+class DroidConfig(EnvironmentConfig):
+    head_name: str = "single_arm"
+    dataset_name: str = "droid"
+    action_dim: int = 7
+    proprio_dim: int = -1
+    pred_horizon: int = 4
+    exp_weight: float = 0
+    horizon: int = 5
+    primary_resize: int = 224
+    wrist_resize: int = -1
+
+
+@dataclass
 class LiberoConfig(EnvironmentConfig):
     head_name: str = "single_arm"
     dataset_name: str = "libero_10_no_noops"
@@ -82,6 +97,7 @@ class AlohaConfig(EnvironmentConfig):
 
 
 ENV_CONFIGS = {
+    "droid": DroidConfig,
     "libero": LiberoConfig,
     "aloha": AlohaConfig,
 }
@@ -118,14 +134,20 @@ class HttpServer:
             }
             self.reset(payload)
             observation = {
+                    ## the default crossformer is only trained wih primary images for single arm setup
                     "image_primary": np.zeros((self.primary_resize, self.primary_resize, 3)),
-                    "image_left_wrist": np.zeros((self.wrist_resize, self.wrist_resize, 3)),
-                    "proprio_single": np.zeros((self.proprio_dim,)),
                 }
-            if self.head_name == "bimanual":
+            if self.head_name == "single_arm":
+                if self.proprio_dim > 0: ## default crossformer does not have proprio_single
+                    observation["proprio_single"] = np.zeros((self.proprio_dim,))
+                if self.wrist_resize > 0:
+                    observation["image_left_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3)),
+
+            elif self.head_name == "bimanual":
+                observation["image_left_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3)),
                 observation["image_right_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3))
                 observation["proprio_bimanual"] = np.zeros((self.proprio_dim,))
-                del observation["proprio_single"]
+
             payload = {
                 "observation": observation,
                 "model": name,
@@ -270,7 +292,7 @@ def main():
     parser.add_argument("--model_step", help="Model step to load", type=int, default=None)
     parser.add_argument(
         "--env_config",
-        help="Environment config name (libero, aloha)",
+        help="Environment config name (droid, libero, aloha)",
         default="libero",
         type=str,
     )
