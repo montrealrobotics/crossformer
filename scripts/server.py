@@ -56,6 +56,17 @@ class EnvironmentConfig:
     primary_resize: int
     wrist_resize: int
 
+@dataclass
+class Droid100Config(EnvironmentConfig):
+    head_name: str = "single_arm"
+    dataset_name: str = "droid_100"
+    action_dim: int = 7
+    proprio_dim: int = 7
+    pred_horizon: int = 4
+    exp_weight: float = 0
+    horizon: int = 5
+    primary_resize: int = 224
+    wrist_resize: int = 128
 
 @dataclass
 class DroidConfig(EnvironmentConfig):
@@ -97,6 +108,7 @@ class AlohaConfig(EnvironmentConfig):
 
 
 ENV_CONFIGS = {
+    "droid_100": Droid100Config,
     "droid": DroidConfig,
     "libero": LiberoConfig,
     "aloha": AlohaConfig,
@@ -141,10 +153,10 @@ class HttpServer:
                 if self.proprio_dim > 0: ## default crossformer does not have proprio_single
                     observation["proprio_single"] = np.zeros((self.proprio_dim,))
                 if self.wrist_resize > 0:
-                    observation["image_left_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3)),
+                    observation["image_left_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3))
 
             elif self.head_name == "bimanual":
-                observation["image_left_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3)),
+                observation["image_left_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3))
                 observation["image_right_wrist"] = np.zeros((self.wrist_resize, self.wrist_resize, 3))
                 observation["proprio_bimanual"] = np.zeros((self.proprio_dim,))
 
@@ -272,10 +284,9 @@ class HttpServer:
             weights = weights / weights.sum()
             # compute the weighted average across all predictions for this timestep
             action = np.sum(weights[:, None] * curr_act_preds, axis=0)
-
-            # print(action)
             return json_response(action)
-        except:
+        except Exception as e:
+            print("exception", e)
             print(traceback.format_exc())
             return "error"
 
