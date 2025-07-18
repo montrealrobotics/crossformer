@@ -28,8 +28,11 @@ faulthandler.enable()
 DROID_CONTROL_FREQUENCY = 15
 
 def resize(img, size=(224, 224)):
-    img = tf.image.resize(img, size=size, method="lanczos3", antialias=True)
-    return tf.cast(tf.clip_by_value(tf.round(img), 0, 255), tf.uint8).numpy()
+    img = img.astype(np.float32)
+    pil_img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), mode="RGB")
+    pil_resized = pil_img.resize(size[::-1], resample=Image.LANCZOS)
+    result = np.array(pil_resized, dtype=np.float32)
+    return np.clip(np.round(result), 0, 255).astype(np.uint8)
 
 @dataclasses.dataclass
 class Args:
