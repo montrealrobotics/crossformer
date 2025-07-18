@@ -10,7 +10,6 @@ import time
 from moviepy.editor import ImageSequenceClip
 
 import numpy as np
-import tensorflow as tf
 import pandas as pd
 from PIL import Image
 import tqdm
