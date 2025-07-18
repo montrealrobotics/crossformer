@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-from scripts.client import WebClientCrossFormerPolicy
+from cf_scripts.client import WebClientCrossFormerPolicy
 faulthandler.enable()
 
 # DROID data collection frequency -- we slow down execution to match this frequency
