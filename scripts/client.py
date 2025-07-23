@@ -65,4 +65,5 @@ class WebClientCrossFormerPolicy(WebClientPolicy):
         requests.post(f"{self._uri}/append", json={"observation": obs})
 
     def reset(self, task: str) -> None:
+        """Only supports text-based task descriptions."""
         requests.post(f"{self._uri}/reset", json={"text": task})
