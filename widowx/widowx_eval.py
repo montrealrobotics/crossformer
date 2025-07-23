@@ -6,6 +6,9 @@ If you wish, you may reproduce these results by [reproducing the robot setup](ht
 and installing [the robot controller](https://github.com/rail-berkeley/bridge_data_robot)
 """
 
+import contextlib
+import signal
+
 from datetime import datetime
 from functools import partial
 import os
@@ -14,14 +17,13 @@ import time
 from absl import app, flags, logging
 import click
 import cv2
-from envs.widowx_env import convert_obs, state_to_eep, wait_for_obs, WidowXGym
+from widowx_env import convert_obs, state_to_eep, wait_for_obs, WidowXGym
 import imageio
-import jax
-import jax.numpy as jnp
 import numpy as np
 from widowx_envs.widowx_env_service import WidowXClient, WidowXConfigs, WidowXStatus
 
 from cf_scripts.client import WebClientCrossFormerPolicy
+from PIL import Image
 
 np.set_printoptions(suppress=True)
 
@@ -73,6 +75,13 @@ ENV_PARAMS = {
 ##############################################################################
 
 
+def resize(img, size=(224, 224)):
+    img = img.astype(np.float32)
+    pil_img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
+    pil_resized = pil_img.resize(size[::-1], resample=Image.LANCZOS)
+    result = np.array(pil_resized, dtype=np.float32)
+    return np.clip(np.round(result), 0, 255).astype(np.uint8)
+
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
 # This context manager temporarily prevents Ctrl+C and delays it after the server call is complete.
@@ -108,18 +117,18 @@ def main(_):
     env_params.update(ENV_PARAMS)
     env_params["start_state"] = list(start_state)
     widowx_client = WidowXClient(host=FLAGS.ip, port=FLAGS.port)
-    widowx_client.init(env_params, image_size=FLAGS.im_size)
+    widowx_client.init(env_params, image_size=256)
     env = WidowXGym(
-        widowx_client, FLAGS.im_size, FLAGS.blocking, STICKY_GRIPPER_NUM_STEPS
+        widowx_client, 256, FLAGS.blocking, STICKY_GRIPPER_NUM_STEPS
     )
     if not FLAGS.blocking:
         assert STEP_DURATION == 0.2, STEP_DURATION_MESSAGE
 
     # load models
-    policy_client = WebClientCrossFormerPolicy(FLAGS.policy_host, FLAGS.policy_port)
+    policy_client = WebClientCrossFormerPolicy(FLAGS.policy_ip, FLAGS.policy_port)
 
 
-    goal_image = jnp.zeros((FLAGS.im_size, FLAGS.im_size, 3), dtype=np.uint8)
+    goal_image = np.zeros((256, 256, 3), dtype=np.uint8)
     goal_instruction = ""
 
     # goal sampling loop
@@ -143,7 +152,7 @@ def main(_):
             #     input("Press [Enter] when ready for taking the goal image. ")
             #     obs = wait_for_obs(widowx_client)
             #     obs = convert_obs(obs, FLAGS.im_size)
-            #     goal = jax.tree_map(lambda x: x[None], obs)
+            #     goal = obs[None]
 
             # # Format task for the model
             # task = model.create_tasks(goals=goal)
@@ -159,7 +168,7 @@ def main(_):
             policy_client.reset(text)
             # For logging purposes
             goal_instruction = text
-            goal_image = jnp.zeros_like(goal_image)
+            goal_image = np.zeros_like(goal_image)
         else:
             raise NotImplementedError()
 
@@ -180,16 +189,17 @@ def main(_):
         actions_from_chunk_completed = 0
         while t < FLAGS.num_timesteps:
             if time.time() > last_tstep + STEP_DURATION:
+                request_data = {"image_primary": resize(obs["image_primary"], size=(FLAGS.im_size, FLAGS.im_size))}
                 policy_client.send(obs)
                 
                 last_tstep = time.time()
 
                 # save images
-                images.append(obs["image_primary"][-1])
+                images.append(obs["image_primary"])
                 goals.append(goal_image)
 
                 if FLAGS.show_image:
-                    bgr_img = cv2.cvtColor(obs["image_primary"][-1], cv2.COLOR_RGB2BGR)
+                    bgr_img = cv2.cvtColor(obs["image_primary"], cv2.COLOR_RGB2BGR)
                     cv2.imshow("img_view", bgr_img)
                     cv2.waitKey(20)
 
@@ -217,6 +227,7 @@ def main(_):
                 t += 1
 
                 if truncated:
+                    print("Truncated:", truncated)
                     break
 
         # save video
