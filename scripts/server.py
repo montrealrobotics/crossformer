@@ -57,6 +57,18 @@ class EnvironmentConfig:
     wrist_resize: int
 
 @dataclass
+class WidowXConfig(EnvironmentConfig):
+    head_name: str = "single_arm"
+    dataset_name: str = "bridge_dataset"
+    action_dim: int = 7
+    proprio_dim: int = -1
+    pred_horizon: int = 4
+    exp_weight: float = 0
+    horizon: int = 5
+    primary_resize: int = 224
+    wrist_resize: int = -1
+
+@dataclass
 class Droid100Config(EnvironmentConfig):
     head_name: str = "single_arm"
     dataset_name: str = "droid_100"
@@ -108,6 +120,7 @@ class AlohaConfig(EnvironmentConfig):
 
 
 ENV_CONFIGS = {
+    "widowx": WidowXConfig,
     "droid_100": Droid100Config,
     "droid": DroidConfig,
     "libero": LiberoConfig,
