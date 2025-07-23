@@ -33,6 +33,11 @@ METRIC_WAYPOINT_SPACING = {
     "tartan_drive": 0.72,
 }
 
+def quadruped_dataset_transform(trajectory: Dict[str, Any]) -> Dict[str, Any]:
+    #should juust work
+    return trajectory
+
+
 def libero_dataset_transform(trajectory: Dict[str, Any]) -> Dict[str, Any]:
     # gripper action is in -1 (open)...1 (close) --> clip to 0...1, flip --> +1 = open, 0 = close
     gripper_action = trajectory["action"][:, -1:]

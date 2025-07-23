@@ -128,7 +128,7 @@ def eval_quadruped(args: Args):
         obs_dim = 59
         observation_cue = np.zeros((1, 5, obs_dim), dtype=np.float32)
         timestep_mask_cue = np.zeros((1, 5), dtype=np.float32)
-
+        task = model.create_tasks(texts=['walk'])
         for step in range(args.MAX_STEPS):
             # Pad observation to 59 dims: first 46 from observation, rest zeros
             padded_obs = np.zeros(obs_dim, dtype=np.float32)
@@ -152,7 +152,7 @@ def eval_quadruped(args: Args):
             rng, key = jax.random.split(rng)
             actions = model.sample_actions(
                 obs,
-                {}, # no task
+                task, #task is "walk"
                 unnormalization_statistics = unnormalization_statistics,
                 head_name="quadruped",
                 rng=rng,
