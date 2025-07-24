@@ -243,6 +243,7 @@ def freeze_weights(
     params_or_params_shape: Params,
     frozen_keys: List[str],
     return_partitions: bool = False,
+    exclusion_keys: List[str] = None
 ):
     """
     Freezes all weights in params_or_params_shape whose keys fnmatch the ones in frozen_keys.
@@ -264,6 +265,17 @@ def freeze_weights(
         ),
         params_or_params_shape,
     )
+    if exclusion_keys:
+        logging.info("Exclusing certain subsets of keys that were frozen")
+        param_partitions = flax.traverse_util.path_aware_map(
+            lambda path, v: (
+                "trainable"
+                if any([fnmatch(".".join(path), key) for key in exclusion_keys]) and v == 'frozen'
+                else v
+            ),
+            param_partitions,
+        )
+
     tx = optax.multi_transform(partition_optimizers, param_partitions)
 
     logging.debug("Frozen params:")
@@ -322,6 +334,7 @@ def create_optimizer(
 
     clip_gradient = kwargs.pop("clip_gradient", None)
     frozen_keys = kwargs.pop("frozen_keys", None)
+    exclusion_keys = kwargs.pop("exclusion_keys", None)
     grad_accumulation_steps = kwargs.pop("grad_accumulation_steps", None)
 
     tx = optax.adamw(mu_dtype=jnp.bfloat16, **kwargs, mask=wd_mask)
@@ -335,7 +348,8 @@ def create_optimizer(
 
     if frozen_keys:
         tx, param_partitions = freeze_weights(
-            tx, params_or_params_shape, frozen_keys, return_partitions=True
+            tx, params_or_params_shape, frozen_keys, return_partitions=True,
+            exclusion_keys = exclusion_keys
         )
         zero_frozen_params = lambda params: jax.tree_map(
             lambda x, y: x if y == "trainable" else jnp.zeros(()),

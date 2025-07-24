@@ -86,6 +86,8 @@ def get_config():
         frozen_keys = ("crossformer_transformer.*",)
     else:
         raise ValueError("Invalid mode")
+    # new parameter to exclude certain subsets that were frozen
+    exclusion_keys = ("crossformer_transformer.obs_new_proprio*")
 
     max_steps = FieldReference(50000)
     window_size = FieldReference(default=1)
@@ -124,6 +126,7 @@ def get_config():
             weight_decay=0.01,
             clip_gradient=1.0,
             frozen_keys=frozen_keys,
+            exclusion_keys = exclusion_keys,
             grad_accumulation_steps=None,  # if you are using grad accumulation, you need to adjust max_steps accordingly
         ),
         val_kwargs=dict(
