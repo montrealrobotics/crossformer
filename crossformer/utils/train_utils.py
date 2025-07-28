@@ -266,11 +266,11 @@ def freeze_weights(
         params_or_params_shape,
     )
     if exclusion_keys:
-        logging.info("Exclusing certain subsets of keys that were frozen")
+        logging.info(f"Exclusing certain subsets of keys that were frozen {exclusion_keys}")
         param_partitions = flax.traverse_util.path_aware_map(
             lambda path, v: (
                 "trainable"
-                if any([fnmatch(".".join(path), key) for key in exclusion_keys]) and v == 'frozen'
+                if (any([fnmatch(".".join(path), key) for key in exclusion_keys]) and v == 'frozen')
                 else v
             ),
             param_partitions,

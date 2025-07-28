@@ -48,13 +48,13 @@ def get_config():
     # an example of how to add a new observation tokenizer and action head
     UPDATE_CONFIG = dict(
         model=dict(
-            observation_tokenizers=dict(
-                new_proprio=ModuleSpec.create(
-                        LowdimObsTokenizer,
-                        obs_keys=["proprio_quadruped"],
-                        dropout_rate=0.2,
-                )
-            )
+            #observation_tokenizers=dict(
+            #    new_proprio=ModuleSpec.create(
+            #            LowdimObsTokenizer,
+            #            obs_keys=["proprio_quadruped"],
+            #            dropout_rate=0.2,
+            #    )
+            #)
             #observation_tokenizers=dict(
             #    new_primary=ModuleSpec.create(
             #        ImageTokenizer,
@@ -87,7 +87,7 @@ def get_config():
     else:
         raise ValueError("Invalid mode")
     # new parameter to exclude certain subsets that were frozen
-    exclusion_keys = ("crossformer_transformer.obs_new_proprio*")
+    exclusion_keys = ("crossformer_transformer.obs_new_proprio*", "crossformer_transformer.obs_quadruped*")
 
     max_steps = FieldReference(50000)
     window_size = FieldReference(default=1)
