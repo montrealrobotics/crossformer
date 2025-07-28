@@ -25,7 +25,8 @@ def get_config():
     # fill this in to configure data loading for your dataset.
     FINETUNING_KWARGS = dict(
         name="quadruped_dataset", #should be name of directory in the "data_dir"
-        data_dir="/home/mprzystupa/tensorflow_datasets", #specify parent folder where dataset is 
+        #data_dir="/home/mprzystupa/tensorflow_datasets", #specify parent folder where dataset is 
+        data_dir="/home/mila/m/michael.przystupa/scratch/tensorflow_datasets",
         #image_obs_keys={"primary": "image_0"},
         image_obs_keys={}, #no images used
         proprio_obs_keys={'quadruped': 'state'}, #"proprio_" is appended to the keys when used

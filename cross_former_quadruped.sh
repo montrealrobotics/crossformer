@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:a100l:1
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=main
+#SBATCH --partition=unkillable
 #SBATCH --mem=32G
 #SBATCH --time=20:00:00
 #SBATCH --exclude=cn-a[001-011],cn-k003
