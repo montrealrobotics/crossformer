@@ -19,12 +19,12 @@ conda activate octo
 
 #python scripts/finetune.py --config.pretrained_path=hf://rail-berkeley/octo-small-1.5 --config.save_dir=./experiments/libero-finetune_batch_128/ --config.batch_size=128
 
-SAVEDIR="/home/mila/m/michael.przystupa/scratch/crossformer-quadruped/$1/"
+SAVEDIR="/home/mila/m/michael.przystupa/scratch/crossformer-quadruped/$2/$1/"
 
 #SAVEDIR="/home/mila/m/michael.przystupa/scratch/octo_exp_action_heads/test/"
 
 PARAMS="--config ./scripts/configs/finetune_quadruped_config.py --config.save_dir=$SAVEDIR --config.batch_size=128 --config.wandb.project=quadruped --config.num_steps=100000"
 
-ARGS="$PARAMS --config.seed=$1"
+ARGS="$PARAMS --config.seed=$1 --config.dataset_kwargs.name=$2"
 echo $ARGS
 python scripts/finetune.py $ARGS 
