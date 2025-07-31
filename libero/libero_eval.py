@@ -9,7 +9,7 @@ import tqdm
 import tyro
 from libero.libero import benchmark
 from libero_utils import get_libero_env, quat2axisangle
-from scripts.client import WebClientCrossFormerPolicy
+from cf_scripts.client import WebClientCrossFormerPolicy
 
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
