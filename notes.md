@@ -55,6 +55,6 @@ This will start the server and it will query the policy three times to compile t
     - Go to crossformer directory and install widowx dependencies: ```pip install -r widowx/widowx_requirements.txt``` and install crossformer and cf_scripts: ```pip install -e .```
     - Go to bridge_data_robot/widowx_envs directory and install it: ```pip install -e .```
     - Open three terminals:
-      - In the first run (if you are not already): ```USB_CONNECTOR_CHART=$(pwd)/usb_connector_chart.yml docker compose up --build robonet```
+      - In the first run (if you are not already): ```USB_CONNECTOR_CHART=$(pwd)/usb_connector_chart.yml docker compose up robonet```
       - In the second run (if you are not already): ```docker compose exec robonet bash -lic "widowx_env_service --server"```
       - In the third run: ```python widowx/widowx_eval.py --policy_ip <ip of server that runs crossformer> --num_timesteps 100 --video_save_path widowx/video``` (video_save_path argument is optinal to save the video of the policy execution)
