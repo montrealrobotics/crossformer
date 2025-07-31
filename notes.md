@@ -58,3 +58,4 @@ This will start the server and it will query the policy three times to compile t
       - In the first run (if you are not already): ```USB_CONNECTOR_CHART=$(pwd)/usb_connector_chart.yml docker compose up robonet```
       - In the second run (if you are not already): ```docker compose exec robonet bash -lic "widowx_env_service --server"```
       - In the third run: ```python widowx/widowx_eval.py --policy_ip <ip of server that runs crossformer> --num_timesteps 100 --video_save_path widowx/video``` (video_save_path argument is optinal to save the video of the policy execution)
+    - Always run ```docker compose exec robonet bash -lic "go_sleep"``` before stopping the robonet_widowx running in the first terminal (Otherwise robot falls abruptly) 
