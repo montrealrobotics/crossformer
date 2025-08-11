@@ -43,7 +43,7 @@ in ```.conda/envs/<<env_name>>/lib/python3.10/site-packages/etils/epath/backend.
   - Also need to install torch: ```pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 ```
 - To use widowx robot:
   - Crossformer should be installed in a server pc (green)
-  - Run crossformer server ```pyhon scripts/server.py --env_config widowx```   
+  - Run crossformer server ```python scripts/server.py --env_config widowx```   
 This will start the server and it will query the policy three times to compile the model. (This takes a bit of time so wait until you see the last passed time print)
   - Don't forget to get the server's ip (will be used in client)
   - On the robot's control pc (probably a nuc):
