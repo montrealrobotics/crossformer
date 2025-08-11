@@ -70,13 +70,18 @@ from isaaclab.utils.assets import read_file
 from isaacsim.core.utils.viewports import set_camera_view
 from isaaclab.devices import Se2Keyboard
 
-from crossformer.model.crossformer_model import CrossFormerModel
+#from crossformer.model.crossformer_model import CrossFormerModel
 import jax
 import pathlib
 import logging
 import collections
 
-
+# Import CrossFormerQudaruped wrapper
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../scripts'))
+from quad_crossformer import CrossFormerQudaruped
+#end crossformerWrapper
 
 # AprilTag detection
 try:
@@ -297,33 +302,14 @@ def main():
     env = load_gym_env()
 
     # Setup keyboard interface
-    # keyboard_interface = VelocityKeyboardInterface(lin_vel_scale=0.8, ang_vel_scale=0.6)
-    sensitivity_lin = 1.0  # Default sensitivity for keyboard commands
-    sensitivity_ang = 1.0  # Default sensitivity for angular commands
-    teleop_interface = Se2Keyboard(
-        v_x_sensitivity=sensitivity_lin, v_y_sensitivity=sensitivity_lin, omega_z_sensitivity=sensitivity_ang
-    )
-
-    teleop_interface.add_callback("R", env.reset)
-    teleop_interface.add_callback("ESCAPE", quit_cb)
-
-    print(teleop_interface)
-
     # Load trained policy
-    #policy = load_policy_rsl("unitree_go1_rough/2025-07-17_18-39-56/exported/policy.pt")  # Adjust filename
-
-
     rng = jax.random.PRNGKey(0) ## I am not sure if we should use args.seed
-    model = CrossFormerModel.load_pretrained(args_cli.model_path, step=args_cli.model_step)
-    #proprio_normalization_statistics = model.dataset_statistics["proprio_single"] if "proprio_single" in model.dataset_statistics else None
-    proprio_normalization_statistics = model.dataset_statistics["go1"]
-    unnormalization_statistics = model.dataset_statistics["go1"]['action']
-
-
+    model = CrossFormerQudaruped(model_path = args_cli.model_path , model_step = args_cli.model_step,
+                                  horizon = 5, app_prev_act = False)
+    
     set_camera_view(eye=[3.5, 3.5, 3.5], target=[0.0, 0.0, 0.0])
 
     # Reset environment
-    teleop_interface.reset()
     obs, _ = env.reset()
 
     count = 0
@@ -343,17 +329,6 @@ def main():
 
     print("\n[INFO] Teleoperation started. Use WASD+QE to control the robot.")
     #things for  collecting obs
-    horizon = 5
-    pred_horizon = 4
-    history = collections.deque(maxlen=horizon)
-    num_obs = 0
-    act_queue = collections.deque(maxlen=pred_horizon)
-
-    #cues
-    obs_dim = 59
-    observation_cue = np.zeros((1, 5, obs_dim), dtype=np.float32)
-    timestep_mask_cue = np.zeros((1, 5), dtype=np.float32)
-    task = model.create_tasks(texts=['walk'])
 
     while simulation_app.is_running():
         with torch.inference_mode():
@@ -389,43 +364,9 @@ def main():
             #obs["policy"][:, 9:12] = torch.tensor(keyboard_command)  # Update policy observation with keyboard command
 
             # Policy inference
-            #action = policy(obs["policy"])
-            # Pad observation to 59 dims: first 46 from observation, rest zeros
-            padded_obs = np.zeros(obs_dim, dtype=np.float32)
             obs = obs['policy']
-            obs_flat = obs.flatten() if hasattr(obs, 'flatten') else np.array(obs).flatten()
-            o_dims = obs_flat.shape[0]
-            padded_obs[:o_dims] = obs_flat[:o_dims]
-
-            # Update observation_cue and timestep_mask_cue as queues
-            observation_cue = np.roll(observation_cue, -1, axis=1)
-            observation_cue[0, -1] = padded_obs
-            timestep_mask_cue = np.roll(timestep_mask_cue, -1, axis=1)
-            timestep_mask_cue[0, -1] = 1.0
-
-            element = {
-                "proprio_quadruped": obs,
-            }
-            history.append(element)
-            num_obs += 1
-            obs = stack_and_pad(history, num_obs)
-            obs['proprio_quadruped'] = observation_cue
-            obs['timestep_pad_mask'] = timestep_mask_cue
-            rng, key = jax.random.split(rng)
-            actions = model.sample_actions(
-                obs,
-                task, #task is "walk"
-                unnormalization_statistics = unnormalization_statistics,
-                head_name="quadruped",
-                rng=rng,
-            )
-            action = actions[0][0]
-            #action = 
-            action = np.array(action)
-            action = torch.from_numpy(action).float()
-            # Step environment
-            print(action) 
-            action = action.unsqueeze(0)
+            #obs[:, ^:12] = 0.0
+            action = model(obs)
             obs, _, _, _, _ = env.step(action)
 
             count += 1
